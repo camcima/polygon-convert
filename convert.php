@@ -42,17 +42,37 @@ if ($dirHandle = opendir($dataFolder)) {
     closedir($dirHandle);
 }
 
+$outHandle = fopen('shapes.csv', 'w');
 foreach ($files as $fileEntry) {
+    echo 'File: ' . $fileEntry['shape_filename'] . "\n";
     $metadataHandle = fopen($dataFolder . '/' . $fileEntry['metadata_filename'], 'r');
+    echo '    Reading Metadata';
     $metadata = readMetadata($metadataHandle);
+    echo "\n";
     
     $shapeHandle = fopen($dataFolder . '/' . $fileEntry['shape_filename'], 'r');
+    echo '    Reading Shapes';
     $shapes = readShapes($shapeHandle);
-    var_dump($shapes);
+    echo "\n";
+    
+    $progress = 0;
+    echo '    Writing Shapes';
+    foreach ($shapes as $shapeId => $shapeData) {
+        if (isset($metadata[$shapeId])) {
+            fwrite($outHandle, $metadata[$shapeId] . ';POLYGON ((' . implode(', ', $shapeData) . '))' . "\n");
+        }
+        if ($progress % 100 == 0) {
+            echo '.';
+        }
+        $progress++;
+    }
+    echo "\n\n";
+    echo "Output: shapes.csv\n";
 }
 
 function readMetadata($fileHandle) {
     $metadata = array();
+    $progress = 0;
     while (!feof($fileHandle)) {
         $line = fgets($fileHandle);
         $id = trim($line);
@@ -66,6 +86,10 @@ function readMetadata($fileHandle) {
         if ($id) {
             $metadata[$id] = $zipCode;
         }
+        if ($progress % 100 == 0) {
+            echo '.';
+        }
+        $progress++;
     }
     
     return $metadata;
@@ -73,6 +97,7 @@ function readMetadata($fileHandle) {
 
 function readShapes($fileHandle) {
     $shapes = array();
+    $progress = 0;
     
     $firstLinePattern = '/^\s*(\d+)\s+([0-9\-\+\.E]+)\s+([0-9\-\+\.E]+)$/';
     $shapeLinePattern = '/^\s*([0-9\-\+\.E]+)\s+([0-9\-\+\.E]+)$/';
@@ -83,14 +108,18 @@ function readShapes($fileHandle) {
             $points = array();
             $pointLng = $matches[2];
             $pointLat = $matches[3];
-            $points[] = array(convertScientificNotation($pointLng), convertScientificNotation($pointLat));
+            $points[] = convertScientificNotation($pointLng) . ' ' . convertScientificNotation($pointLat);
         } elseif (preg_match($shapeLinePattern, $line, $matches)) {
             $pointLng = $matches[1];
             $pointLat = $matches[2];
-            $points[] = array(convertScientificNotation($pointLng), convertScientificNotation($pointLat));
+            $points[] = convertScientificNotation($pointLng) . ' ' . convertScientificNotation($pointLat);
         } elseif ($line == 'END') {
             $shapes[$id] = $points;
         }
+        if ($progress % 10000 == 0) {
+            echo '.';
+        }
+        $progress++;
     }
     
     return $shapes;    
